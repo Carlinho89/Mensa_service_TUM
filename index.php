@@ -8,6 +8,28 @@ class MensaListElement {
     public $address ="";
     
 }
+/**
+*Object to hold a mensa_mensen
+*
+**/
+
+class Mensa_Mensen{
+    public $id  = "";
+    public $name = "";
+    public $anschrift ="";
+
+}
+
+
+class Result{
+    public $mensa_mensen = array();
+}
+
+
+/**
+*Framework for rest api
+*
+**/
 
 \Slim\Slim::registerAutoloader();
 
@@ -16,8 +38,15 @@ $app = new \Slim\Slim();
 
 
 
+/**
+*returns the list of mensas
+*
+**/
+
 $app->get('/list/', function () {
-   $html = file_get_html('http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-en.html?vorlage_speiseplan_uebersicht=&cHash=502f9361c27815f5b13465388746f1e7');
+       $deutch = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-de.html";
+    $english = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-en.html";
+   $html = file_get_html($english);
 
 $es = $html->find('#c1582 p')[0];
 //$es2 = $es->find('a')[0];
@@ -43,11 +72,21 @@ $mensalist=array();
 foreach($es->find('a') as $element){
 
     if($element->plaintext!="today"){
-        $listelem = new MensaListElement();
+       /* $listelem = new MensaListElement();
         $listelem->name = $element->plaintext;
         $listelem->link  = $element->href;
         $listelem->address = array_shift($addresses);
-        array_push($mensalist, $listelem);
+*/
+        $mensen = new Mensa_Mensen();
+        $mensen->name = $element->plaintext;
+        
+        //filter_var($element->href, FILTER_SANITIZE_NUMBER_INT);
+        $mensen->id  = preg_replace("/[^0-9]/","",$element->href);
+        $mensen->anschrift = array_shift($addresses);
+        if($mensen->id != ""){
+            array_push($mensalist, $mensen);
+        }
+        
          
     }
     
@@ -60,7 +99,9 @@ foreach($es->find('a') as $element){
 
  
 // Returns: {"firstname":"foo","lastname":"bar"}
-echo json_encode($mensalist);
+$result = new Result();
+$result->mensa_mensen = $mensalist;
+echo json_encode($result);
  
 
 });
