@@ -2,6 +2,8 @@
 include_once('simple_html_dom.php');
 require 'Slim/Slim.php';
 
+define("URLBASE", "http://www.studentenwerk-muenchen.de/");
+
 class MensaListElement {
     public $name = "";
     public $link  = "";
@@ -20,6 +22,19 @@ class Mensa_Mensen{
 
 }
 
+class Mensa_Menu{
+    public $id = "";
+    public $mensa_id = "";
+    public $date = "";
+    public $type_short = "";
+    public $type_long = "";
+    public $type_nr = "";
+    public $name = "";
+
+
+}
+
+
 
 class Result{
     public $mensa_mensen = array();
@@ -37,71 +52,37 @@ class Result{
 $app = new \Slim\Slim();
 
 
-
 /**
 *returns the list of mensas
 *
 **/
 
 $app->get('/list/', function () {
-       $deutch = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-de.html";
+    $deutch = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-de.html";
     $english = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-en.html";
-   $html = file_get_html($english);
+    $html = file_get_html($english);
 
-$es = $html->find('#c1582 p')[0];
-//$es2 = $es->find('a')[0];
+    $es = $html->find('#c1582 p')[0];
 
-//echo($es2);
-//echo $es->plaintext;
+    $result = new Result();
+    $result->mensa_mensen = parseMensa_Mensen($es);
 
-$addresses = array();
+    $links = mensaLinks($es);
 
 
-foreach($es->find('text') as $element){
-if (substr($element, 0, 1) === ')')
-    //echo $element->href . '<br>';
-    //echo $element->plaintext . '<br>';
-    array_push($addresses, substr($element, 3));
-    //echo substr($element, 3).'<br>';
-}
+    foreach ($links as $link) {
+        echo URLBASE . $link;
+         $html = file_get_html(URLBASE . $link);
+         $menus = $html->find('.menu tbody');
 
-/**
-remember to delete last element
-**/
-$mensalist=array();
-foreach($es->find('a') as $element){
-
-    if($element->plaintext!="today"){
-       /* $listelem = new MensaListElement();
-        $listelem->name = $element->plaintext;
-        $listelem->link  = $element->href;
-        $listelem->address = array_shift($addresses);
-*/
-        $mensen = new Mensa_Mensen();
-        $mensen->name = $element->plaintext;
-        
-        //filter_var($element->href, FILTER_SANITIZE_NUMBER_INT);
-        $mensen->id  = preg_replace("/[^0-9]/","",$element->href);
-        $mensen->anschrift = array_shift($addresses);
-        if($mensen->id != ""){
-            array_push($mensalist, $mensen);
-        }
-        
+         foreach ($menus as $menu)
+            echo $menu . "<br>";
          
     }
-    
-}
-       
-//echo json_encode($es2);
+
+    //echo json_encode($links);
 
 
- 
-
- 
-// Returns: {"firstname":"foo","lastname":"bar"}
-$result = new Result();
-$result->mensa_mensen = $mensalist;
-echo json_encode($result);
  
 
 });
@@ -251,3 +232,76 @@ $app->delete(
  * and returns the HTTP response to the HTTP client.
  */
 $app->run();
+
+
+
+
+
+
+/**
+*Functions to parse MENSA studentenwerk
+*/
+
+function mensaLinks($es){
+
+ $mensalinks = array();
+    foreach($es->find('a') as $element){
+
+        if($element->plaintext!="today"){
+            $id  = preg_replace("/[^0-9]/","",$element->href);
+          
+            if($id != ""){
+                array_push($mensalinks, $element->href);
+            }        
+        }
+        
+    }
+    return $mensalinks;
+
+}
+
+function parseMensa_Mensen($es)
+{
+
+
+    $addresses = array();
+
+
+    foreach($es->find('text') as $element){
+    if (substr($element, 0, 1) === ')')
+        //echo $element->href . '<br>';
+        //echo $element->plaintext . '<br>';
+        array_push($addresses, substr($element, 3));
+        //echo substr($element, 3).'<br>';
+    }
+
+    /**
+    remember to delete last element
+    **/
+    $mensalist=array();
+    $mensalinks = array();
+    foreach($es->find('a') as $element){
+
+        if($element->plaintext!="today"){
+           /* $listelem = new MensaListElement();
+            $listelem->name = $element->plaintext;
+            $listelem->link  = $element->href;
+            $listelem->address = array_shift($addresses);
+    */
+            $mensen = new Mensa_Mensen();
+            $mensen->name = $element->plaintext;
+            
+            //filter_var($element->href, FILTER_SANITIZE_NUMBER_INT);
+            $mensen->id  = preg_replace("/[^0-9]/","",$element->href);
+            $mensen->anschrift = array_shift($addresses);
+            if($mensen->id != ""){
+                array_push($mensalinks, $element->href);
+                array_push($mensalist, $mensen);
+            }
+            
+             
+        }
+        
+    }
+    return $mensalist;
+}
