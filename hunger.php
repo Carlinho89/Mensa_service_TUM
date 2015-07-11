@@ -23,7 +23,7 @@ function redirect($url, $statusCode = 303){
 }
 function pdfToString(){
     $links = crawl_page("http://www.betriebsrestaurant-gmbh.de/index.php?id=91");
-    $pdfLink;
+    $pdfLink = "";
     foreach ($links as $file) {
         if (strpos(strtolower($file), '.pdf') !== FALSE && strpos($file, '_FMI_') !== FALSE) {
             $weekNumber = date("W"); 
