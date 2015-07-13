@@ -39,8 +39,44 @@ function pdfToString(){
     $pdf    = $parser->parseFile($pdfLink);
     
     $text = $pdf->getText();
+
     return $text;    
 }
+
+function pdfToJSON() {
+    $raw = preg_split("/\n\s*\n/", pdfToString()); //split the whole pdf string on the days
+    $days = array_slice($raw, 4, count($raw)-7); // Remove unneded stuff
+    $currentDayOfWeek = idate('w', time());// Only display today and future days
+
+    $i = 1;
+    foreach($days as $day) {
+        if ($i >= $currentDayOfWeek) {
+            $dayArray = preg_split("/\n\d[.]/", $day);
+            $title = array_shift($dayArray);
+
+            $dateTitles = preg_split("/[\s,]+/", $title);
+            $exactDate = getCorrectDataFormat($dateTitles[count($dateTitles)-2]);
+
+            echo $exactDate;
+            foreach($dayArray as $meal) {
+                $realMeal = preg_replace("/\d([,]\d*)* oder B.n.W./", "", $meal);
+            }
+        }
+        $i++;
+    }
+}
+function getCorrectDataFormat($date) {
+    //$correctDate;
+    $splitDate = preg_split($date,"/[.]/");
+    echo "COUNT".count($splitDate);
+    foreach ($splitDate as $tmp) {
+        echo $tmp;
+    }
+
+
+    return $date;
+}
+
 function debug_to_console( $data ) {
     if ( is_array( $data ) )
         $output = "<script>console.log( 'Debug Objects: " . implode( ',', $data) . "' );</script>";
@@ -100,6 +136,7 @@ function debug_to_console( $data ) {
             }
             $i += 1;
         }
+        pdfToJSON();
         ?>
     </div>
 </body>
