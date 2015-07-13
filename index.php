@@ -1,6 +1,7 @@
 <?php
 ini_set('max_execution_time', 300);
 include_once('simple_html_dom.php');
+include 'bistroFMIParser.php';
 require 'Slim/Slim.php';
 
 define("URLBASE", "http://www.studentenwerk-muenchen.de/");
@@ -139,10 +140,32 @@ $app->get('/list/:mensaId', function ($mensaId) {
         
     }
 
+    /*
+    *Adding mensa fmi content
+    *
+    */
+
+    $resultFMI= pdfToJSON();
+
+    foreach ($resultFMI->mensa_mensen as $mensen) {
+        array_push( $result->mensa_mensen, $mensen);
+    }
+
+    foreach ($resultFMI->mensa_menu as $menu) {
+        array_push( $result->mensa_menu, $menu);
+    }
+
+    echo json_encode($result);    
+ 
+
+});
+
+
+
+$app->get('/listfmi/', function () {
+    $result= pdfToJSON();
+   
     echo json_encode($result);
-
-
-    
  
 
 });

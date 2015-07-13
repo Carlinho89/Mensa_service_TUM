@@ -58,6 +58,15 @@ class Mensa {
     }
 
 }
+
+
+class SplitMeal {
+    public $price = "";
+    public $name = "";
+
+   
+
+}
 /**
  * Parser for pdf containing the restaurant menu for the week
  * @return string Text version of pfd
@@ -89,7 +98,7 @@ function pdfToString(){
 function pdfToJSON() {
     $mensa = null;
     // Generating info on FMI Bistro
-    $mensaInfo = new MensaInfo("501","FMI Bistro","Boltzmannstr. 2, Garching");
+    $mensaInfo = new MensaInfo("666","FMI Bistro","Boltzmannstr. 2, Garching");
     // Array for parsed meals
     $meals = array();
     // Split the whole pdf string on the days
@@ -120,14 +129,15 @@ function pdfToJSON() {
                 // splitMeal->name  meal's name
                 // splitMeal->price meal's price
                 $aMeal->name = $splitMeal->name;
+                $aMeal->type_nr = $splitMeal->price;
                 $meals[] = $aMeal;
             }
         }
         $i++;
     }
     $mensa = new Mensa(array($mensaInfo),$meals);
-    echo json_encode($mensa);
-    return json_encode($mensa);
+    //echo json_encode($mensa);
+    return $mensa;
 }
 
 /**
@@ -161,7 +171,7 @@ function splitMealFromPrice($mealString) {
     for ($i = 0; $i<count($splitString)-3; $i++) {
         $mealName .= $splitString[$i]." ";
     }
-    $splitMeal = null;
+    $splitMeal = new SplitMeal();
     $splitMeal->name = $mealName;
     $splitMeal->price = $price;
     return $splitMeal;
@@ -193,6 +203,6 @@ function redirect($url, $statusCode = 303){
 
 
 <?php
-    pdfToJSON();
+    //pdfToJSON();
 ?>
 
