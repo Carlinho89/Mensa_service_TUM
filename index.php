@@ -67,15 +67,14 @@ class Mensa_Beilagen{
 
 
 class Result{
+    public $x_info = "TCA Web Service to parse Mensa"; 
     public $mensa_mensen = array();
     public $mensa_menu = array();
     public $mensa_beilagen = array();
+    public $mensa_preise = array();
 }
 
-class MensaMenuResult{
-    public $mensa_beilagen_links = array();
-    public $mensa_menus = array();
-}
+
 
 
 
@@ -95,7 +94,7 @@ $app = new \Slim\Slim();
 *
 **/
 
-$app->get('/list/', function () {
+$app->get('/list/:mensaId', function ($mensaId) {
     $deutch = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-de.html";
     $english = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-en.html";
     $html = file_get_html($english);
@@ -105,9 +104,15 @@ $app->get('/list/', function () {
     $result = new Result();
     $result->mensa_mensen = parseMensa_Mensen($mensen_list);
 
-    $mensen_links = mensaLinks($mensen_list);
-    $mensen_daily_links = mensaDailyLinks($mensen_links);
 
+    $mensen_links = mensaLinks($mensen_list, $mensaId);
+    
+    /**
+    *Use mensaDailyLinks() to get all the results,
+    *mensaRemainingDailyLinks() to get the days still to come
+    */
+    $mensen_daily_links = mensaDailyLinks($mensen_links);
+    $mensen_daily_links = mensaRemainingDailyLinks($mensen_links);
     $all_daily_menus = array();
     foreach ($mensen_daily_links as $mdl) {             
         $daily=parseDailyLink($mdl);
@@ -119,7 +124,15 @@ $app->get('/list/', function () {
 
     foreach ($all_daily_menus as $adm) {
         if($adm->type_short == "bio" || $adm->type_short == "bei" || $adm->type_short == "akt"){
-            array_push( $result->mensa_beilagen, $adm);
+            $beilagen = new Mensa_Beilagen();
+            $beilagen->mensa_id =  $adm->mensa_id;
+            $beilagen->date =  $adm->date;
+            $beilagen->type_short =  $adm->type_short;
+            $beilagen->type_long =  $adm->type_long;
+            $beilagen->name =  $adm->name;
+
+
+            array_push( $result->mensa_beilagen, $beilagen);
         } else{
             array_push( $result->mensa_menu, $adm);
         }
@@ -128,22 +141,7 @@ $app->get('/list/', function () {
 
     echo json_encode($result);
 
-/*
-    $mensaIds = array();
-    foreach ( $result->mensa_mensen as $mensen){
-        array_push($mensaIds, $mensen->id);
-    }
 
-    $mensa_menu_result = parseMensa_Menus($links, $mensaIds);
-    $result->mensa_menu = $mensa_menu_result->mensa_menus; 
-    //$link = $links[0];
-
-    
-    echo json_encode();
-//    echo json_encode($mensa_menus);
-
-    $result->mensa_beilagen = "";
-    */
     
  
 
@@ -304,16 +302,22 @@ $app->run();
 *Functions to parse MENSA studentenwerk
 */
 
-function mensaLinks($es){
+function mensaLinks($es, $mensaId){
 
  $mensalinks = array();
     foreach($es->find('a') as $element){
 
-        if($element->plaintext!="today"){
+        if($element->plaintext!="today" && $element->plaintext!="heute" ){
             $id  = preg_replace("/[^0-9]/","",$element->href);
           
             if($id != ""){
-                array_push($mensalinks, $element->href);
+                if($mensaId == "all"){
+                    array_push($mensalinks, $element->href);
+                }
+                elseif($mensaId == $id){
+                    array_push($mensalinks, $element->href);
+                }
+                
             }        
         }
         
@@ -367,6 +371,41 @@ function parseMensa_Mensen($es)
 }
 
 
+function mensaRemainingDailyLinks($links){
+     $mensa_beilagen_links= array();
+     foreach ($links as $link) {
+
+        $html = file_get_html(URLBASE . $link);
+        $menus = $html->find('.menu');
+            foreach ($menus as $menu){
+
+                 
+                /**
+                *Headline parsing to retrieve link to the daily beilagen
+                *and date
+                *
+                */
+                $headline = $menu->find('.headline', 1);
+                $a= $headline->find('a',0);
+                $date = filter_var($a->class, FILTER_SANITIZE_NUMBER_INT);
+                if(strtotime($date)>=strtotime('now')){
+                    $link_beilagen = $headline -> find('a', 1)->href;
+                    array_push($mensa_beilagen_links, $link_beilagen);
+                }
+               
+            }
+
+
+     }
+    
+           
+  return $mensa_beilagen_links;              
+
+
+
+}
+
+
 
 
 function mensaDailyLinks($links){
@@ -384,6 +423,7 @@ function mensaDailyLinks($links){
                 *
                 */
                 $headline = $menu->find('.headline', 1);
+
                 $link_beilagen = $headline -> find('a', 1)->href;
                 array_push($mensa_beilagen_links, $link_beilagen);
             }
@@ -515,153 +555,8 @@ function parseDailyLink($mdl){
 
 
 
-function parseMensa_Menus($links, $mensaIds)
-{
-    $mensaindex=0;
-    $mensa_menus = array();
-    $mensa_beilagen_links= array();
-   
-   
-    $lin= array();
-    array_push($lin, $links[0]);
-
-    foreach ($links as $link) {
-    
-        $mensa_id=$mensaIds[$mensaindex];
-       
-        $mensaindex++;
-
-        /**
-        *Leave this in case we want to filter by id. change ! to =
-        *and put the id
-        */
-        if($mensa_id != ""){
-
-            
-
-            $html = file_get_html(URLBASE . $link);
-            $menus = $html->find('.menu');
-            
-
-            $men= array();
-            array_push($men, $menus[0]);
-            foreach ($menus as $menu){
-
-                 
-                /**
-                *Headline parsing to retrieve link to the daily beilagen
-                *and date
-                *
-                */
-
-                $headline = $menu->find('.headline', 1);
-                $a= $headline->find('a',0);
-                $date = filter_var($a->class, FILTER_SANITIZE_NUMBER_INT);
-                
-                
-                $link_beilagen = $headline -> find('a', 1)->href;
-                array_push($mensa_beilagen_links, $link_beilagen);
-
-                
-
-                /**
-                *Parsing of each table row (except headline) to retrieve
-                *mensamenu element
-                *
-                */
-
-                
-                $rows = $menu->find('tr');
-                
-                foreach ($rows as $row) {
-                    if($row != $rows[0]){
-                        $type_long= $row->find('td',0)->plaintext;
-                        $name= "".$row->find('td',1)->plaintext;
-
-
-                        if (strpos($type_long,'Aktionsessen') !== false) {
-                             
-                             $type_short = "ae";
-                             
-                        } elseif(strpos($type_long,'Biogericht') !== false) {
-
-                            $type_short = "bg";
-
-                        } elseif(strpos($type_long,'Tagesgericht') !== false) {
-
-                            $type_short = "tg";
-                        
-                        } else{
-                            $type_short = "??";
-                        }
-
-
-
-                        
-
-
-                        
-                        $type_nr = preg_replace("/[^0-9]/","",$type_long);
-
-                        $mensa_menu = new Mensa_Menu();
-                        $mensa_menu->id = "";
-                        $mensa_menu->mensa_id = $mensa_id;
-                        $mensa_menu->date = $date;
-                        $mensa_menu->type_short = $type_short;
-                        $mensa_menu->type_long = $type_long;
-                        $mensa_menu->type_nr = $type_nr;
-                        
-                        $mensa_menu->name = str_replace(array('.', ' ', "\n", "\t", "\r"), '', $name);
-                        
-                        //echo $mensa_menu;
-                        array_push($mensa_menus, $mensa_menu);
-                        unset($mensa_menu);
-
-                        
-                        
-                        /*
-                        echo $type_long."<br>";
-                        echo $type_nr."<br>";
-                        echo $type_short."<br>";
-                        echo $name."<br>";
-                        **/
-                    }
-                    
-                }
-               
-
-            }
-
-        }
-
-
-         
-            
-
-         
-    }
-
-    /**
-    *I use this to fix some empty values that the html is giving
-    */
-    for ($i = 0; $i < count($mensa_menus); $i++) {
-       if($mensa_menus[$i]->type_long == " "){
-        $mensa_menus[$i]->type_long =$mensa_menus[$i-1]->type_long;
-        $mensa_menus[$i]->type_short =$mensa_menus[$i-1]->type_long;
-        $mensa_menus[$i]->type_nr =$mensa_menus[$i-1]->type_nr;
-   
-
-
-       } 
-    }
-
-     $result = new MensaMenuResult();
-     $result->mensa_menus=$mensa_menus;
-     $result->mensa_beilagen_links=$mensa_beilagen_links;
-
-    return $result;
-}
 
 
 
 
+?>
