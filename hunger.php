@@ -43,7 +43,53 @@ function pdfToString(){
     return $text;    
 }
 
+class Meal {
+    public $id;
+    public $mensa_id;
+    public $date;
+    public $type_short;
+    public $type_long;
+    public $type_nr;
+    public $name;
+}
+class MensaInfo {
+    public $id;
+    public $name;
+    public $anschrift;
+    /**
+     * MensaInfo constructor.
+     * @param $id
+     * @param $name
+     * @param $anschrift
+     */
+    public function __construct($id, $name, $anschrift)
+    {
+        $this->id = $id;
+        $this->name = $name;
+        $this->anschrift = $anschrift;
+    }
+}
+class Mensa {
+    public $mensa_mensen = array();
+    public $mensa_menu = array();
+
+    /**
+     * Mensa constructor.
+     * @param array $mensa_mensen
+     * @param array $meals
+     */
+    public function __construct(array $mensa_mensen, array $meals)
+    {
+        $this->mensa_mensen = $mensa_mensen;
+        $this->mensa_menu = $meals;
+    }
+
+}
 function pdfToJSON() {
+    $mensa;
+    $mensaInfo = new MensaInfo("501","FMI Bistro","Boltzmannstr. 2, Garching");
+    $meals = array();
+
     $raw = preg_split("/\n\s*\n/", pdfToString()); //split the whole pdf string on the days
     $days = array_slice($raw, 4, count($raw)-7); // Remove unneded stuff
     $currentDayOfWeek = idate('w', time());// Only display today and future days
@@ -55,26 +101,48 @@ function pdfToJSON() {
             $title = array_shift($dayArray);
 
             $dateTitles = preg_split("/[\s,]+/", $title);
-            $exactDate = getCorrectDataFormat($dateTitles[count($dateTitles)-2]);
+            $realDate = getCorrectDataFormat($dateTitles[count($dateTitles)-2]);
 
-            echo $exactDate;
+
             foreach($dayArray as $meal) {
-                $realMeal = preg_replace("/\d([,]\d*)* oder B.n.W./", "", $meal);
+                $aMeal = new Meal();
+                $aMeal->date = $realDate;
+                $aMeal->mensa_id = $mensaInfo->id;
+                $splitMeal = splitMealFromPrice(preg_replace("/\d([,]\d*)* oder B.n.W./", "", $meal));
+                $aMeal->name = $splitMeal->name;
+                $meals[] = $aMeal;
             }
         }
         $i++;
     }
+    $mensa = new Mensa(array($mensaInfo),$meals);
+    echo json_encode($mensa);
+    return json_encode($mensa);
 }
 function getCorrectDataFormat($date) {
-    //$correctDate;
-    $splitDate = preg_split($date,"/[.]/");
-    echo "COUNT".count($splitDate);
-    foreach ($splitDate as $tmp) {
-        echo $tmp;
+    $correctDate = "incorrect";
+    $splitDate = explode(".", $date);//preg_split($date,'/[,.\s;]+/');
+
+    if(count($splitDate) == 3) {
+        $day = $splitDate[0];
+        $month = $splitDate[1];
+        $year = $splitDate[2];
+        $correctDate = $year."-".$month."-".$day;
+            }
+
+    return $correctDate;
+}
+function splitMealFromPrice($mealString) {
+    $splitString = explode(" ", $mealString);
+    $price = $splitString[count($splitString)-2];
+    $mealName = "";
+    for ($i = 0; $i<count($splitString)-3; $i++) {
+        $mealName .= $splitString[$i]." ";
     }
-
-
-    return $date;
+    $splitMeal = null;
+    $splitMeal->name = $mealName;
+    $splitMeal->price = $price;
+    return $splitMeal;
 }
 
 function debug_to_console( $data ) {
