@@ -23,7 +23,7 @@ function redirect($url, $statusCode = 303){
 }
 function pdfToString(){
     $links = crawl_page("http://www.betriebsrestaurant-gmbh.de/index.php?id=91");
-    $pdfLink;
+    $pdfLink = "";
     foreach ($links as $file) {
         if (strpos(strtolower($file), '.pdf') !== FALSE && strpos($file, '_FMI_') !== FALSE) {
             $weekNumber = date("W"); 
@@ -39,8 +39,112 @@ function pdfToString(){
     $pdf    = $parser->parseFile($pdfLink);
     
     $text = $pdf->getText();
+
     return $text;    
 }
+
+class Meal {
+    public $id;
+    public $mensa_id;
+    public $date;
+    public $type_short;
+    public $type_long;
+    public $type_nr;
+    public $name;
+}
+class MensaInfo {
+    public $id;
+    public $name;
+    public $anschrift;
+    /**
+     * MensaInfo constructor.
+     * @param $id
+     * @param $name
+     * @param $anschrift
+     */
+    public function __construct($id, $name, $anschrift)
+    {
+        $this->id = $id;
+        $this->name = $name;
+        $this->anschrift = $anschrift;
+    }
+}
+class Mensa {
+    public $mensa_mensen = array();
+    public $mensa_menu = array();
+
+    /**
+     * Mensa constructor.
+     * @param array $mensa_mensen
+     * @param array $meals
+     */
+    public function __construct(array $mensa_mensen, array $meals)
+    {
+        $this->mensa_mensen = $mensa_mensen;
+        $this->mensa_menu = $meals;
+    }
+
+}
+function pdfToJSON() {
+    $mensa;
+    $mensaInfo = new MensaInfo("501","FMI Bistro","Boltzmannstr. 2, Garching");
+    $meals = array();
+
+    $raw = preg_split("/\n\s*\n/", pdfToString()); //split the whole pdf string on the days
+    $days = array_slice($raw, 4, count($raw)-7); // Remove unneded stuff
+    $currentDayOfWeek = idate('w', time());// Only display today and future days
+
+    $i = 1;
+    foreach($days as $day) {
+        if ($i >= $currentDayOfWeek) {
+            $dayArray = preg_split("/\n\d[.]/", $day);
+            $title = array_shift($dayArray);
+
+            $dateTitles = preg_split("/[\s,]+/", $title);
+            $realDate = getCorrectDataFormat($dateTitles[count($dateTitles)-2]);
+
+
+            foreach($dayArray as $meal) {
+                $aMeal = new Meal();
+                $aMeal->date = $realDate;
+                $aMeal->mensa_id = $mensaInfo->id;
+                $splitMeal = splitMealFromPrice(preg_replace("/\d([,]\d*)* oder B.n.W./", "", $meal));
+                $aMeal->name = $splitMeal->name;
+                $meals[] = $aMeal;
+            }
+        }
+        $i++;
+    }
+    $mensa = new Mensa(array($mensaInfo),$meals);
+    echo json_encode($mensa);
+    return json_encode($mensa);
+}
+function getCorrectDataFormat($date) {
+    $correctDate = "incorrect";
+    $splitDate = explode(".", $date);//preg_split($date,'/[,.\s;]+/');
+
+    if(count($splitDate) == 3) {
+        $day = $splitDate[0];
+        $month = $splitDate[1];
+        $year = $splitDate[2];
+        $correctDate = $year."-".$month."-".$day;
+            }
+
+    return $correctDate;
+}
+function splitMealFromPrice($mealString) {
+    $splitString = explode(" ", $mealString);
+    $price = $splitString[count($splitString)-2];
+    $mealName = "";
+    for ($i = 0; $i<count($splitString)-3; $i++) {
+        $mealName .= $splitString[$i]." ";
+    }
+    $splitMeal = null;
+    $splitMeal->name = $mealName;
+    $splitMeal->price = $price;
+    return $splitMeal;
+}
+
 function debug_to_console( $data ) {
     if ( is_array( $data ) )
         $output = "<script>console.log( 'Debug Objects: " . implode( ',', $data) . "' );</script>";
@@ -100,6 +204,7 @@ function debug_to_console( $data ) {
             }
             $i += 1;
         }
+        pdfToJSON();
         ?>
     </div>
 </body>
