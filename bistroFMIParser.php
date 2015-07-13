@@ -1,32 +1,6 @@
 <?php
 include 'vendor/autoload.php';
 /**
- * Parser for pdf containing the restaurant menu for the week
- * @return string Text version of pfd
- */
-function pdfToString(){
-    $links = crawl_page("http://www.betriebsrestaurant-gmbh.de/index.php?id=91");
-    $pdfLink = "";
-    foreach ($links as $file) {
-        if (strpos(strtolower($file), '.pdf') !== FALSE && strpos($file, '_FMI_') !== FALSE) {
-            $weekNumber = date("W");
-            if ($weekNumber === substr($file,16,2)){
-                // current link is MI pdf
-                $pdfLink = "http://www.betriebsrestaurant-gmbh.de/".$file;
-            }
-        }
-    }
-
-    // Parse pdf file and build necessary objects.
-    $parser = new \Smalot\PdfParser\Parser();
-    $pdf    = $parser->parseFile($pdfLink);
-
-    $text = $pdf->getText();
-
-    return $text;
-}
-
-/**
  * Class representing a mensa's meal
  * Class Meal
  */
@@ -84,8 +58,36 @@ class Mensa {
     }
 
 }
+/**
+ * Parser for pdf containing the restaurant menu for the week
+ * @return string Text version of pfd
+ */
+function pdfToString(){
+    $i = 0;
+    $links = crawl_page("http://www.betriebsrestaurant-gmbh.de/index.php?id=91");
+    $pdfLink = "";
+    foreach ($links as $file) {
+        if (strpos(strtolower($file), '.pdf') !== FALSE && strpos($file, '_FMI_') !== FALSE) {
+            $weekNumber = date("W");
+            if ($weekNumber === substr($file,16,2)){
+                // current link is MI pdf
+                $pdfLink = "http://www.betriebsrestaurant-gmbh.de/".$file;
+            }
+        }
+    }
+
+    // Parse pdf file and build necessary objects.
+    $parser = new \Smalot\PdfParser\Parser();
+    $pdf    = $parser->parseFile($pdfLink);
+
+    $text = $pdf->getText();
+
+    return $text;
+}
+
+
 function pdfToJSON() {
-    $mensa;
+    $mensa = null;
     // Generating info on FMI Bistro
     $mensaInfo = new MensaInfo("501","FMI Bistro","Boltzmannstr. 2, Garching");
     // Array for parsed meals
@@ -124,6 +126,7 @@ function pdfToJSON() {
         $i++;
     }
     $mensa = new Mensa(array($mensaInfo),$meals);
+    echo json_encode($mensa);
     return json_encode($mensa);
 }
 
@@ -164,4 +167,32 @@ function splitMealFromPrice($mealString) {
     return $splitMeal;
 }
 
+function crawl_page($url){
+    $mylinks = array();
+    //Create a new DOM document
+    $dom = new DOMDocument;
+    //Parse the HTML. The @ is used to suppress any parsing errors
+    //that will be thrown if the $html string isn't valid XHTML.
+    @$dom->loadHTMLFile($url);
+    //Get all links. You could also use any other tag name here,
+    //like 'img' or 'table', to extract other tags.
+    $links = $dom->getElementsByTagName('a');
+    //Iterate over the extracted links and display their URLs
+    foreach ($links as $link){
+        //Extract and save the "href" attribute.
+        array_push($mylinks, $link->getAttribute('href'));
+    }
+    return $mylinks;
+}
+function redirect($url, $statusCode = 303){
+    header('Location: ' . $url, true, $statusCode);
+    die();
+}
+
 ?>
+
+
+<?php
+    pdfToJSON();
+?>
+
