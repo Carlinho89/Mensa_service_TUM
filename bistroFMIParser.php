@@ -121,16 +121,22 @@ function pdfToJSON() {
             $realDate = getCorrectDataFormat($dateTitles[count($dateTitles)-2]);
 
             //Parsing meal data
+            $i=1;
             foreach($dayArray as $meal) {
                 $aMeal = new Meal();
+                $aMeal->id= 1;
                 $aMeal->date = $realDate;
                 $aMeal->mensa_id = $mensaInfo->id;
                 $splitMeal = splitMealFromPrice(preg_replace("/\d([,]\d*)* oder B.n.W./", "", $meal));
                 // splitMeal->name  meal's name
                 // splitMeal->price meal's price
                 $aMeal->name = $splitMeal->name;
-                $aMeal->type_nr = $splitMeal->price;
+                $aMeal->type_short = $splitMeal->price;
+                $aMeal->type_long = "Tagesgericht ".$i;
+                $aMeal->type_nr = $i;
+                //$aMeal->type_nr = $splitMeal->price;
                 $meals[] = $aMeal;
+                $i++;
             }
         }
         $i++;
