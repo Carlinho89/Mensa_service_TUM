@@ -4,6 +4,12 @@ include_once('simple_html_dom.php');
 include 'bistroFMIParser.php';
 require 'Slim/Slim.php';
 
+
+
+
+
+
+
 define("URLBASE", "http://www.studentenwerk-muenchen.de/");
 
 class MensaListElement {
@@ -94,8 +100,33 @@ $app = new \Slim\Slim();
 *returns the list of mensas
 *
 **/
+$app->get('/a', function ()  {
 
-$app->get('/list/:mensaId', function ($mensaId) {
+    echo "today: ". strtotime("today");
+    echo "yesterday: ". strtotime("yesterday");
+
+   
+    
+});
+
+$app->get('/list/:mensaId', function ($mensaId) use ($app) {
+
+    if($mensaId=="all"){
+        if (!getFromFile()){
+            $app->redirect('./parse/'.$mensaId);
+        }
+
+    } else{
+        $app->redirect('./parse/'.$mensaId);
+    }
+   
+    
+});
+
+$app->get('/list/parse/:mensaId', function ($mensaId) {
+
+    
+
     $deutch = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-de.html";
     $english = "http://www.studentenwerk-muenchen.de/mensa/speiseplan/index-en.html";
     $html = file_get_html($english);
@@ -157,10 +188,15 @@ $app->get('/list/:mensaId', function ($mensaId) {
         } 
     }
    
-    
+    $json = json_encode($result);
 
-    echo json_encode($result);    
- 
+    if ($mensaId == "all"){
+        //saveToDB($json);
+        writeToFile($json);
+    }
+    
+    echo $json;    
+     
 
 });
 
@@ -188,48 +224,96 @@ $app->get('/listfmi/', function () {
 });
 
 
-
-
-// POST route
-$app->post(
-    '/post',
-    function () {
-        echo 'This is a POST route';
-    }
-);
-
-// PUT route
-$app->put(
-    '/put',
-    function () {
-        echo 'This is a PUT route';
-    }
-);
-
-// PATCH route
-$app->patch('/patch', function () {
-    echo 'This is a PATCH route';
-});
-
-// DELETE route
-$app->delete(
-    '/delete',
-    function () {
-        echo 'This is a DELETE route';
-    }
-);
-
-/**
- * Step 4: Run the Slim application
- *
- * This method should be called last. This executes the Slim application
- * and returns the HTTP response to the HTTP client.
- */
 $app->run();
 
 
 
+/**
+*Functions for caching
+*
+*/
+function getFromFile(){
+    $filename = strtotime("today").".txt";
+    if (file_exists($filename)) {
+        $myfile = fopen($filename, "r") or die("Unable to open file!");
+        echo fread($myfile,filesize($filename));
+        fclose($myfile);
+        return true;
+    }
+    return false;
+}
 
+
+function writeToFile($json){
+    $filename = strtotime("today").".txt";
+    $filename2 = strtotime("yesterday").".txt";
+
+    $myfile = fopen($filename, "w") or die("Unable to open file!");
+    
+    fwrite($myfile, $json);
+
+    fclose($myfile);
+
+    
+    if (file_exists($filename2)) {
+        unlink($filename2);
+    }
+
+
+}
+
+function getFromDB(){
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "mensawebservice";
+    $conn = new mysqli($servername, $username, $password, $dbname);
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    } 
+
+    $sql = "SELECT json FROM json_cache where date = ".strtotime("today");
+    $result = $conn->query($sql);
+
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+    // output data of each row
+   
+        $result = $row["json"];
+  
+} else {
+    $result = "";
+}
+$conn->close();
+
+return $result;
+}
+
+
+function saveToDB($json){
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "mensawebservice";
+    $conn = new mysqli($servername, $username, $password, $dbname);
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    } 
+
+
+    // prepare and bind
+    $stmt = $conn->prepare("INSERT INTO json_cache VALUES (?, ?)");
+    $stmt->bind_param("is", $date, $json);
+
+    // set parameters and execute
+    $date = strtotime("today");
+     
+    $stmt->execute();
+
+
+    $conn->close();
+
+}
 
 
 /**
