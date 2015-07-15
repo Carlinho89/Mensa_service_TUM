@@ -4,6 +4,8 @@ include_once('simple_html_dom.php');
 include 'bistroFMIParser.php';
 require 'Slim/Slim.php';
 
+require_once("DataBase.class.php");
+      
 
 
 
@@ -12,12 +14,7 @@ require 'Slim/Slim.php';
 
 define("URLBASE", "http://www.studentenwerk-muenchen.de/");
 
-class MensaListElement {
-    public $name = "";
-    public $link  = "";
-    public $address ="";
-    
-}
+
 /**
 *Object to hold a mensa_mensen
 *
@@ -27,6 +24,14 @@ class Mensa_Mensen{
     public $id  = "";
     public $name = "";
     public $anschrift ="";
+
+    public function store($db){
+        if ($this->id != ""){
+            $sql = "INSERT INTO mensa_mensen VALUES ({$this->id}, '{$this->name}', '{$this->anschrift}');";
+            $result = $db->Query($sql);
+        }
+
+    }
 
 }
 
@@ -95,16 +100,19 @@ class Result{
 
 $app = new \Slim\Slim();
 
+$db =  new DataBase();
 
 /**
 *returns the list of mensas
 *
 **/
-$app->get('/a', function ()  {
+$app->get('/a', function ()  use ($db){
 
-    echo "today: ". strtotime("today");
-    echo "yesterday: ". strtotime("yesterday");
-
+   $mensen = new Mensa_Mensen;
+   $mensen->id = 8;
+   $mensen->name = "a";
+   $mensen->anschrift = "a";
+   $mensen->store($db);
    
     
 });
@@ -123,7 +131,7 @@ $app->get('/list/:mensaId', function ($mensaId) use ($app) {
     
 });
 
-$app->get('/list/parse/:mensaId', function ($mensaId) {
+$app->get('/list/parse/:mensaId', function ($mensaId) use ($db){
 
     
 
@@ -262,29 +270,26 @@ function writeToFile($json){
 
 }
 
-function getFromDB(){
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "mensawebservice";
-    $conn = new mysqli($servername, $username, $password, $dbname);
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    } 
+function getFromDB($db){
+    
 
     $sql = "SELECT json FROM json_cache where date = ".strtotime("today");
-    $result = $conn->query($sql);
 
-    if ($result->num_rows > 0) {
+    $result = $db->Query($sql);
+    
+    if (!$result) {
+        
+        $result = "";
+    
+    }else{
+
         $row = $result->fetch_assoc();
-    // output data of each row
-   
         $result = $row["json"];
-  
-} else {
-    $result = "";
-}
-$conn->close();
+    }
+
+
+    
+
 
 return $result;
 }
