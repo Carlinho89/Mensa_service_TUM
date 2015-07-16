@@ -12,6 +12,16 @@ class Meal {
     public $type_long;
     public $type_nr;
     public $name;
+
+     public function store($db){
+        if ($this->id != ""){
+            $sql = "INSERT INTO mensa_menu VALUES 
+            ({$this->id}, {$this->mensa_id}, DATE('{$this->date}'), '{$this->type_short}', '{$this->type_long}', {$this->type_nr}, '{$this->name}');";
+            $result = $db->Query($sql);
+        }
+
+    }
+
 }
 
 /**
@@ -33,6 +43,14 @@ class MensaInfo {
         $this->id = $id;
         $this->name = $name;
         $this->anschrift = $anschrift;
+    }
+
+     public function store($db){
+        if ($this->id != ""){
+            $sql = "INSERT INTO mensa_mensen VALUES ({$this->id}, '{$this->name}', '{$this->anschrift}');";
+            $result = $db->Query($sql);
+        }
+
     }
 }
 

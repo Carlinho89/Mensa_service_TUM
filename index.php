@@ -53,6 +53,14 @@ class Mensa_Menu{
             "type_nr: {$this->type_nr}<br>".
             "name: {$this->name}<br>";
     }
+    public function store($db){
+        if ($this->id != ""){
+            $sql = "INSERT INTO mensa_menu VALUES 
+            ({$this->id}, {$this->mensa_id}, '{$this->date}', '{$this->type_short}', '{$this->type_long}', {$this->type_nr}, '{$this->name}');";
+            $result = $db->Query($sql);
+        }
+
+    }
 
 
 }
@@ -72,6 +80,17 @@ class Mensa_Beilagen{
             "type_long: {$this->type_long}<br>".
             "name: {$this->name}<br>";
     }
+
+
+    public function store($db){
+        if ($this->mensa_id != ""){
+            $sql = "INSERT INTO mensa_beilagen VALUES 
+            ( {$this->mensa_id}, '{$this->date}', '{$this->type_short}', '{$this->type_long}', '{$this->name}');";
+            $result = $db->Query($sql);
+        }
+
+    }
+
 
 
 }
@@ -102,27 +121,47 @@ $app = new \Slim\Slim();
 
 $db =  new DataBase();
 
-/**
-*returns the list of mensas
-*
-**/
+
 $app->get('/a', function ()  use ($db){
 
-   $mensen = new Mensa_Mensen;
-   $mensen->id = 8;
-   $mensen->name = "a";
-   $mensen->anschrift = "a";
-   $mensen->store($db);
-   
+echo getLatestDate($db);
+ if(strtotime("today") <= strtotime(getLatestDate($db)))
+    echo json_encode(getMensaList($db, "mensa_menu"));
+else echo "aaaaaaaaaaa";
     
 });
 
-$app->get('/list/:mensaId', function ($mensaId) use ($app) {
+
+/**
+ *returns the list of mensas
+ *
+ */
+$app->get('/list/:mensaId', function ($mensaId) use ($app, $db) {
 
     if($mensaId=="all"){
-        if (!getFromFile()){
-            $app->redirect('./parse/'.$mensaId);
+        
+        //Check weather updating info on fmi on the db
+        if(strtotime("today") > strtotime(getLatestDateFMI($db))){
+            updateFMI($db);
+
         }
+        
+         //Check weather updating or using db
+        if(strtotime("today") <= strtotime(getLatestDate($db))){
+
+            $result = new Result();
+            $result->mensa_mensen = getMensaList($db, "mensa_mensen");
+            $result->mensa_menu = getMensaList($db, "mensa_menu");
+     
+            $result->mensa_beilagen = getMensaList($db, "mensa_beilagen");
+
+            echo json_encode($result);
+
+        }
+
+        
+
+       
 
     } else{
         $app->redirect('./parse/'.$mensaId);
@@ -142,38 +181,27 @@ $app->get('/list/parse/:mensaId', function ($mensaId) use ($db){
     $mensen_list = $html->find('#c1582 p')[0];
 
     $result = new Result();
-    $result->mensa_mensen = parseMensa_Mensen($mensen_list);
+    $result->mensa_mensen = parseMensa_Mensen($mensen_list, $db);
 
 
     $mensen_links = mensaLinks($mensen_list, $mensaId);
-    
-    /**
-    *Use mensaDailyLinks() to get all the results,
-    *mensaRemainingDailyLinks() to get the days from current
-    */
-    $mensen_daily_links = mensaDailyLinks($mensen_links);
-    $mensen_daily_links = mensaRemainingDailyLinks($mensen_links);
-    $all_daily_menus = array();
-    foreach ($mensen_daily_links as $mdl) {             
-        $daily=parseDailyLink($mdl);
-        foreach ($daily as $d) {
-            array_push( $all_daily_menus, $d);
-        }
-        
-    }
+    $all_daily_menus = getAllDaylyMenus($mensen_links);
 
+   
+   
     foreach ($all_daily_menus as $adm) {
         if($adm->type_short == "bio" || $adm->type_short == "bei" || $adm->type_short == "akt"){
             $beilagen = new Mensa_Beilagen();
             $beilagen->mensa_id =  $adm->mensa_id;
             $beilagen->date =  $adm->date;
             $beilagen->type_short =  $adm->type_short;
-            $beilagen->type_long =  $adm->type_long;
-            $beilagen->name =  $adm->name;
+            $beilagen->type_long =  trim($adm->type_long);
+            $beilagen->name =  trim($adm->name);
 
-
+            $beilagen->store($db);
             array_push( $result->mensa_beilagen, $beilagen);
         } else{
+            $adm->store($db);
             array_push( $result->mensa_menu, $adm);
         }
         
@@ -188,10 +216,12 @@ $app->get('/list/parse/:mensaId', function ($mensaId) use ($db){
 
     if($mensaId == "all" || $mensaId == "666"){
         foreach ($resultFMI->mensa_mensen as $mensen) {
+            $mensen->store($db);
             array_push( $result->mensa_mensen, $mensen);
         }
 
         foreach ($resultFMI->mensa_menu as $menu) {
+            $menu->store($db);
             array_push( $result->mensa_menu, $menu);
         } 
     }
@@ -199,7 +229,7 @@ $app->get('/list/parse/:mensaId', function ($mensaId) use ($db){
     $json = json_encode($result);
 
     if ($mensaId == "all"){
-        //saveToDB($json);
+        
         writeToFile($json);
     }
     
@@ -240,6 +270,58 @@ $app->run();
 *Functions for caching
 *
 */
+function updateFMI($db){
+
+    $resultFMI= pdfToJSON();
+
+    
+        foreach ($resultFMI->mensa_mensen as $mensen) {
+            $mensen->store($db);
+        }
+
+        foreach ($resultFMI->mensa_menu as $menu) {
+            $menu->store($db);
+        } 
+    
+}
+
+function getLatestDateFMI($db){
+    $sql = "SELECT MAX(m.date) as date FROM mensa_menu m where mensa_id = 666 ";
+
+    $result = $db->Query($sql);
+    
+    if (!$result) {
+        
+        $result = "";
+    
+    }else{
+
+        $row = $result->fetch_assoc();
+        $result = $row["date"];
+    }
+
+    return $result;
+}
+
+function getLatestDate($db){
+    $sql = "SELECT MAX(m.date) as date from (select date from mensa_beilagen  UNION SELECT date FROM mensa_menu where mensa_id <> 666) m";
+
+    $result = $db->Query($sql);
+    
+    if (!$result) {
+        
+        $result = "";
+    
+    }else{
+
+        $row = $result->fetch_assoc();
+        $result = $row["date"];
+    }
+
+    return $result;
+}
+
+
 function getFromFile(){
     $filename = strtotime("today").".txt";
     if (file_exists($filename)) {
@@ -291,7 +373,29 @@ function getFromDB($db){
     
 
 
-return $result;
+    return $result;
+}
+
+
+function getMensaList($db, $table){
+    if($table == "mensa_mensen"){
+        $sql = "SELECT * FROM ".$table;
+    }else{
+        $sql= "SELECT * FROM ".$table." m WHERE date(m.date) >= CURRENT_DATE ORDER BY m.date";        
+    }
+    
+    $mensa_list = array();
+    $result = $db->Query($sql);
+    if ($result->num_rows > 0) {
+        while($row = $result->fetch_assoc()) {
+            array_push($mensa_list, $row);
+       }
+    
+    } 
+    
+
+    return $mensa_list;
+
 }
 
 
@@ -325,10 +429,10 @@ function saveToDB($json){
 *Functions to parse MENSA studentenwerk
 */
 
-function mensaLinks($es, $mensaId){
+function mensaLinks($mensen_list, $mensaId){
 
  $mensalinks = array();
-    foreach($es->find('a') as $element){
+    foreach($mensen_list->find('a') as $element){
 
         if($element->plaintext!="today" && $element->plaintext!="heute" ){
             $id  = preg_replace("/[^0-9]/","",$element->href);
@@ -349,14 +453,14 @@ function mensaLinks($es, $mensaId){
 
 }
 
-function parseMensa_Mensen($es)
+function parseMensa_Mensen($mensen_list,$db)
 {
 
 
     $addresses = array();
 
 
-    foreach($es->find('text') as $element){
+    foreach($mensen_list->find('text') as $element){
     if (substr($element, 0, 1) === ')')
         //echo $element->href . '<br>';
         //echo $element->plaintext . '<br>';
@@ -367,7 +471,7 @@ function parseMensa_Mensen($es)
     
     $mensalist=array();
    
-    foreach($es->find('a') as $element){
+    foreach($mensen_list->find('a') as $element){
 
         if($element->plaintext!="today"){
            /* $listelem = new MensaListElement();
@@ -376,13 +480,13 @@ function parseMensa_Mensen($es)
             $listelem->address = array_shift($addresses);
     */
             $mensen = new Mensa_Mensen();
-            $mensen->name = $element->plaintext;
+            $mensen->name = trim($element->plaintext);
             
             //filter_var($element->href, FILTER_SANITIZE_NUMBER_INT);
             $mensen->id  = preg_replace("/[^0-9]/","",$element->href);
-            $mensen->anschrift = array_shift($addresses);
+            $mensen->anschrift = trim(array_shift($addresses));
             if($mensen->id != ""){
-                
+                $mensen->store($db);
                 array_push($mensalist, $mensen);
             }
             
@@ -411,7 +515,10 @@ function mensaRemainingDailyLinks($links){
                 $headline = $menu->find('.headline', 1);
                 $a= $headline->find('a',0);
                 $date = filter_var($a->class, FILTER_SANITIZE_NUMBER_INT);
-                if(strtotime($date)>=strtotime('today') && strtotime($date)<=strtotime('now +10 days')){
+
+                //Change to this to get only next ten days
+                //if(strtotime($date)>=strtotime('today') && strtotime($date)<=strtotime('now +10 days')){
+                if(strtotime($date)>=strtotime('today')){
                     $link_beilagen = $headline -> find('a', 1)->href;
                     array_push($mensa_beilagen_links, $link_beilagen);
                 }
@@ -421,8 +528,7 @@ function mensaRemainingDailyLinks($links){
 
      }
     
-           
-  return $mensa_beilagen_links;              
+     return $mensa_beilagen_links;              
 
 
 
@@ -550,6 +656,7 @@ function parseDailyLink($mdl){
             $temp = trim(str_replace(array( "\n", "\t", "\r", " with meat ", "  " ), '', $name));
             $mensa_menu->name = str_replace( "(v)", '', $temp);
             //echo $mensa_menu;
+          
             array_push($mensa_menus, $mensa_menu);
             unset($mensa_menu);
             
@@ -581,14 +688,37 @@ function parseDailyLink($mdl){
         $mensa_menus[$i]->type_long = "Other 1";
         //$mensa_menus[$i]->type_short = "oth";
         $mensa_menus[$i]->type_nr = "1";
-   
-
-
        } 
+
     }
+
+
             
     return $mensa_menus;
 }
+
+
+
+function getAllDaylyMenus($mensen_links){
+     $all_daily_menus = array();
+    /**
+    *Use mensaDailyLinks() to get all the results,
+    *mensaRemainingDailyLinks() to get the days from current
+    */
+    //$mensen_daily_links = mensaDailyLinks($mensen_links);
+    $mensen_daily_links = mensaRemainingDailyLinks($mensen_links);
+    
+    foreach ($mensen_daily_links as $mdl) {             
+        $daily=parseDailyLink($mdl);
+        foreach ($daily as $d) {
+            array_push( $all_daily_menus, $d);
+        }
+        
+    }
+    return $all_daily_menus;
+
+
+ }
 
 
 
